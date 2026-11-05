@@ -176,6 +176,34 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({ event, onClo
             </div>
           </div>
 
+          {/* Visual State-Change Diff Viewer (if metadata has previous_state and new_state) */}
+          {(event.metadata?.previous_state || event.metadata?.new_state) && (
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <div className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+                <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                <span>Audited State Mutation Diff (Before vs After)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-[11px]">
+                <div className="bg-rose-950/20 border border-rose-500/30 rounded-lg p-3">
+                  <div className="text-rose-400 font-semibold mb-1 text-[10px] uppercase">
+                    - Previous State (Removed)
+                  </div>
+                  <pre className="text-rose-300/90 overflow-x-auto">
+                    {JSON.stringify(event.metadata?.previous_state ?? {}, null, 2)}
+                  </pre>
+                </div>
+                <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-lg p-3">
+                  <div className="text-emerald-400 font-semibold mb-1 text-[10px] uppercase">
+                    + New State (Applied)
+                  </div>
+                  <pre className="text-emerald-300/90 overflow-x-auto">
+                    {JSON.stringify(event.metadata?.new_state ?? {}, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* RFC 8785 Canonical JSON Representation */}
           <div>
             <div className="flex items-center justify-between mb-2">

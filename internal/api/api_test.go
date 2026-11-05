@@ -14,6 +14,7 @@ import (
 	grpc_server "github.com/alexandrmotologa/auditforge/internal/api/grpc"
 	pb "github.com/alexandrmotologa/auditforge/internal/api/grpc/proto"
 	"github.com/alexandrmotologa/auditforge/internal/api/rest"
+	"github.com/alexandrmotologa/auditforge/internal/auth"
 	"github.com/alexandrmotologa/auditforge/internal/index"
 	"github.com/alexandrmotologa/auditforge/internal/ledger"
 	"google.golang.org/grpc"
@@ -64,11 +65,8 @@ func TestREST_IngestAndQuery(t *testing.T) {
 	acc, idx, wal, sseHub, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
-	validator := func(key string) bool {
-		return key == "test-valid-key"
-	}
-
-	handler := rest.NewHandler(acc, idx, wal, sseHub, ledger.AlgorithmBlake3, validator)
+	keyStore, _ := auth.NewKeyStore("", []string{"test-valid-key"})
+	handler := rest.NewHandler(acc, idx, wal, sseHub, keyStore, nil, nil, nil, ledger.AlgorithmBlake3)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 

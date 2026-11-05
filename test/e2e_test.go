@@ -15,6 +15,7 @@ import (
 	grpc_server "github.com/alexandrmotologa/auditforge/internal/api/grpc"
 	pb "github.com/alexandrmotologa/auditforge/internal/api/grpc/proto"
 	"github.com/alexandrmotologa/auditforge/internal/api/rest"
+	"github.com/alexandrmotologa/auditforge/internal/auth"
 	"github.com/alexandrmotologa/auditforge/internal/export"
 	"github.com/alexandrmotologa/auditforge/internal/index"
 	"github.com/alexandrmotologa/auditforge/internal/ledger"
@@ -66,7 +67,8 @@ func TestEndToEnd_FullComplianceLifecycle(t *testing.T) {
 	defer acc.Close()
 
 	// 2. Start REST & gRPC Servers
-	restHandler := rest.NewHandler(acc, indexer, wal, sseHub, ledger.AlgorithmBlake3, func(k string) bool { return true })
+	keyStore, _ := auth.NewKeyStore("", []string{"e2e-test-key"})
+	restHandler := rest.NewHandler(acc, indexer, wal, sseHub, keyStore, nil, nil, nil, ledger.AlgorithmBlake3)
 	httpServer := httptest.NewServer(restHandler)
 	defer httpServer.Close()
 
@@ -100,7 +102,10 @@ func TestEndToEnd_FullComplianceLifecycle(t *testing.T) {
 		}
 
 		b, _ := json.Marshal(payload)
-		resp, err := client.Post(httpServer.URL+"/api/v1/events?sync=true", "application/json", bytes.NewReader(b))
+		req, _ := http.NewRequest("POST", httpServer.URL+"/api/v1/events?sync=true", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "e2e-test-key")
+		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("rest ingest failed: %v", err)
 		}

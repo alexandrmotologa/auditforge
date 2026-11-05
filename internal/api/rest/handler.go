@@ -9,35 +9,52 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexandrmotologa/auditforge/internal/alerting"
+	"github.com/alexandrmotologa/auditforge/internal/auth"
+	"github.com/alexandrmotologa/auditforge/internal/forwarder"
 	"github.com/alexandrmotologa/auditforge/internal/index"
 	"github.com/alexandrmotologa/auditforge/internal/ledger"
+	"github.com/alexandrmotologa/auditforge/internal/notary"
 )
-
-// APIKeyValidator validates incoming HTTP request credentials
-type APIKeyValidator func(key string) bool
 
 // Handler coordinates REST routing, authentication, and responses
 type Handler struct {
-	acc       *ledger.Accumulator
-	indexer   *index.Indexer
-	wal       *ledger.WAL
-	sseHub    *SSEHub
-	algo      string
-	validator APIKeyValidator
-	mux       *http.ServeMux
+	acc                  *ledger.Accumulator
+	indexer              *index.Indexer
+	wal                  *ledger.WAL
+	sseHub               *SSEHub
+	keyStore             *auth.KeyStore
+	forwarder            *forwarder.Forwarder
+	alertDispatcher      *alerting.Dispatcher
+	notaryClient         *notary.Client
+	algo                 string
+	mux                  *http.ServeMux
 	simulatedTamperBlock *uint64
 }
 
-// NewHandler initializes all REST endpoints
-func NewHandler(acc *ledger.Accumulator, indexer *index.Indexer, wal *ledger.WAL, sseHub *SSEHub, algo string, validator APIKeyValidator) *Handler {
+// NewHandler initializes all REST endpoints with RBAC, forwarders, and alert dispatchers
+func NewHandler(
+	acc *ledger.Accumulator,
+	indexer *index.Indexer,
+	wal *ledger.WAL,
+	sseHub *SSEHub,
+	keyStore *auth.KeyStore,
+	fwd *forwarder.Forwarder,
+	alertDisp *alerting.Dispatcher,
+	notaryClient *notary.Client,
+	algo string,
+) *Handler {
 	h := &Handler{
-		acc:       acc,
-		indexer:   indexer,
-		wal:       wal,
-		sseHub:    sseHub,
-		algo:      ledger.NormalizeAlgorithm(algo),
-		validator: validator,
-		mux:       http.NewServeMux(),
+		acc:             acc,
+		indexer:         indexer,
+		wal:             wal,
+		sseHub:          sseHub,
+		keyStore:        keyStore,
+		forwarder:       fwd,
+		alertDispatcher: alertDisp,
+		notaryClient:    notaryClient,
+		algo:            ledger.NormalizeAlgorithm(algo),
+		mux:             http.NewServeMux(),
 	}
 
 	h.registerRoutes()
@@ -45,11 +62,11 @@ func NewHandler(acc *ledger.Accumulator, indexer *index.Indexer, wal *ledger.WAL
 }
 
 func (h *Handler) registerRoutes() {
-	// Ingestion
-	h.mux.HandleFunc("POST /api/v1/events", h.authMiddleware(h.handleIngestEvent))
-	h.mux.HandleFunc("POST /api/v1/events/batch", h.authMiddleware(h.handleIngestBatch))
+	// Ingestion (requires ingest_only or admin)
+	h.mux.HandleFunc("POST /api/v1/events", h.rbacMiddleware(auth.RoleIngestOnly, h.handleIngestEvent))
+	h.mux.HandleFunc("POST /api/v1/events/batch", h.rbacMiddleware(auth.RoleIngestOnly, h.handleIngestBatch))
 
-	// Search & Query
+	// Search & Query (requires auditor_read or admin, or public for local cockpit)
 	h.mux.HandleFunc("GET /api/v1/events", h.handleSearchEvents)
 	h.mux.HandleFunc("GET /api/v1/events/", h.handleGetEventByID)
 	h.mux.HandleFunc("GET /api/v1/blocks", h.handleListBlocks)
@@ -59,6 +76,15 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/v1/verify", h.handleVerifyLedger)
 	h.mux.HandleFunc("GET /api/v1/stats", h.handleGetStats)
 	h.mux.HandleFunc("GET /metrics", h.handleMetrics)
+
+	// Webhooks & SIEM Forwarding Management
+	h.mux.HandleFunc("GET /api/v1/webhooks", h.handleListWebhooks)
+	h.mux.HandleFunc("POST /api/v1/webhooks", h.rbacMiddleware(auth.RoleAdmin, h.handleCreateWebhook))
+
+	// API Keys Management
+	h.mux.HandleFunc("GET /api/v1/keys", h.rbacMiddleware(auth.RoleAdmin, h.handleListKeys))
+	h.mux.HandleFunc("POST /api/v1/keys", h.rbacMiddleware(auth.RoleAdmin, h.handleCreateKey))
+	h.mux.HandleFunc("DELETE /api/v1/keys/", h.rbacMiddleware(auth.RoleAdmin, h.handleRevokeKey))
 
 	// Real-time stream
 	h.mux.HandleFunc("GET /api/v1/stream", h.sseHub.ServeHTTP)
@@ -70,7 +96,7 @@ func (h *Handler) registerRoutes() {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS Headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
 
 	if r.Method == http.MethodOptions {
@@ -81,9 +107,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mux.ServeHTTP(w, r)
 }
 
-func (h *Handler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (h *Handler) rbacMiddleware(requiredRole string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if h.validator == nil {
+		if h.keyStore == nil {
 			next(w, r)
 			return
 		}
@@ -96,8 +122,15 @@ func (h *Handler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
-		if !h.validator(key) {
+		apiKey, ok := h.keyStore.Authenticate(key)
+		if !ok {
 			writeJSONError(w, http.StatusUnauthorized, "invalid or missing api key")
+			return
+		}
+
+		// Verify role permission
+		if !auth.HasPermission(apiKey, requiredRole, "") {
+			writeJSONError(w, http.StatusForbidden, fmt.Sprintf("insufficient permissions: required %s, found %s", requiredRole, apiKey.Role))
 			return
 		}
 
@@ -324,6 +357,10 @@ func (h *Handler) handleVerifyLedger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := ledger.VerifyLedgerChain(blocks)
+	if !res.Valid && h.alertDispatcher != nil && res.TamperedBlockIndex != nil {
+		h.alertDispatcher.NotifyTamper(*res.TamperedBlockIndex, res.Reason)
+	}
+
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -368,6 +405,88 @@ func (h *Handler) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "auditforge_blocks_total %d\n", stats.TotalBlocks)
 }
 
+func (h *Handler) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
+	if h.forwarder == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.forwarder.ListSubscriptions())
+}
+
+func (h *Handler) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
+	if h.forwarder == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "forwarder not configured")
+		return
+	}
+
+	var sub forwarder.Subscription
+	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid webhook json")
+		return
+	}
+
+	if sub.URL == "" {
+		writeJSONError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+
+	if sub.ID == "" {
+		sub.ID = fmt.Sprintf("sub_%d", time.Now().UnixNano())
+	}
+	sub.Enabled = true
+
+	h.forwarder.RegisterSubscription(&sub)
+	writeJSON(w, http.StatusCreated, sub)
+}
+
+func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
+	if h.keyStore == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.keyStore.ListKeys())
+}
+
+func (h *Handler) handleCreateKey(w http.ResponseWriter, r *http.Request) {
+	if h.keyStore == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "auth keystore not configured")
+		return
+	}
+
+	var req struct {
+		Name     string `json:"name"`
+		TenantID string `json:"tenant_id"`
+		Role     string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid key creation json")
+		return
+	}
+
+	apiKey, err := h.keyStore.CreateKey(req.Name, req.TenantID, req.Role)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, apiKey)
+}
+
+func (h *Handler) handleRevokeKey(w http.ResponseWriter, r *http.Request) {
+	if h.keyStore == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "auth keystore not configured")
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/keys/")
+	if err := h.keyStore.RevokeKey(id); err != nil {
+		writeJSONError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
+}
+
 func (h *Handler) handleSimulateTamper(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Action     string  `json:"action"` // "enable" or "disable"
@@ -386,6 +505,10 @@ func (h *Handler) handleSimulateTamper(w http.ResponseWriter, r *http.Request) {
 		target = *req.BlockIndex
 	}
 	h.simulatedTamperBlock = &target
+
+	if h.alertDispatcher != nil {
+		h.alertDispatcher.NotifyTamper(target, "Simulated malicious DBA injection")
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":                 "tamper_simulation_enabled",

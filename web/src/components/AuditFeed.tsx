@@ -61,8 +61,67 @@ export const AuditFeed: React.FC<AuditFeedProps> = ({
   const totalPages = Math.ceil(total / limit) || 1;
   const currentPage = Math.floor(offset / limit) + 1;
 
+  const quickFilterCategory = (category: string) => {
+    let act = '';
+    if (category === 'auth') act = 'auth';
+    if (category === 'access') act = 'permission';
+    if (category === 'export') act = 'export';
+    if (category === 'config') act = 'rotate';
+    setActionInput(act);
+    onFilterChange({
+      tenant_id: tenantInput.trim() || undefined,
+      action: act || undefined,
+      q: queryInput.trim() || undefined,
+    });
+  };
+
   return (
     <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      {/* Quick Filter Categories Bar */}
+      <div className="px-4 py-2.5 bg-slate-950/60 border-b border-slate-800/80 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-[11px] font-semibold text-slate-400 mr-1">Compliance Quick Filters:</span>
+        <button
+          onClick={() => quickFilterCategory('')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            actionInput === '' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          All Events
+        </button>
+        <button
+          onClick={() => quickFilterCategory('auth')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            actionInput === 'auth' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          🔐 Auth & MFA
+        </button>
+        <button
+          onClick={() => quickFilterCategory('access')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            actionInput === 'permission' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          🛡️ Access & Roles
+        </button>
+        <button
+          onClick={() => quickFilterCategory('export')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            actionInput === 'export' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          📦 Data Export
+        </button>
+        <button
+          onClick={() => quickFilterCategory('config')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            actionInput === 'rotate' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          ⚙️ Key Rotation
+        </button>
+      </div>
+
       {/* Search & Filter Header */}
       <form onSubmit={handleSearchSubmit} className="p-4 border-b border-slate-800 bg-slate-900/80">
         <div className="flex flex-col md:flex-row items-center gap-3">

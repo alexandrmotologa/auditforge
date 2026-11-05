@@ -6,9 +6,12 @@ import { AuditFeed } from './components/AuditFeed';
 import { EventDetailModal } from './components/EventDetailModal';
 import { ProofExportModal } from './components/ProofExportModal';
 import { TamperSimulatorModal } from './components/TamperSimulatorModal';
+import { BlockChainExplorer } from './components/BlockChainExplorer';
 import { AuditEvent, LedgerStats, VerificationResult } from './types';
+import { ListFilter, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'events' | 'blockchain'>('events');
   const [stats, setStats] = useState<LedgerStats | null>(null);
   const [verResult, setVerResult] = useState<VerificationResult | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -156,6 +159,16 @@ export const App: React.FC = () => {
         ip_address: `192.168.1.${Math.floor(Math.random() * 250) + 1}`,
         user_agent: 'AuditForge-SDK/1.0',
         environment: 'production',
+        previous_state: {
+          role: 'viewer',
+          mfa_enforced: false,
+          permissions: ['read:public'],
+        },
+        new_state: {
+          role: 'security_auditor',
+          mfa_enforced: true,
+          permissions: ['read:public', 'read:audit_ledger', 'export:proof_bundle'],
+        },
       },
     };
 
@@ -217,17 +230,50 @@ export const App: React.FC = () => {
         {/* Operational Metrics Cards */}
         <MetricsCards stats={stats} />
 
-        {/* Real-Time Compliance Audit Feed & Inspector */}
-        <AuditFeed
-          events={events}
-          total={total}
-          limit={limit}
-          offset={offset}
-          onPageChange={handlePageChange}
-          onFilterChange={handleFilterChange}
-          onSelectEvent={(evt) => setSelectedEvent(evt)}
-          isLoading={isLoadingEvents}
-        />
+        {/* View Switcher Tabs */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('events')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                activeTab === 'events'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <ListFilter className="w-3.5 h-3.5" />
+              <span>Real-Time Audit Event Stream</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('blockchain')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                activeTab === 'blockchain'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Block Chain & Merkle DAG Explorer</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'events' ? (
+          <AuditFeed
+            events={events}
+            total={total}
+            limit={limit}
+            offset={offset}
+            onPageChange={handlePageChange}
+            onFilterChange={handleFilterChange}
+            onSelectEvent={(evt) => setSelectedEvent(evt)}
+            isLoading={isLoadingEvents}
+          />
+        ) : (
+          <BlockChainExplorer />
+        )}
       </main>
 
       {/* Modals */}

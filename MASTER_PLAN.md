@@ -226,3 +226,15 @@ $$\text{Leaf}_x' \neq \text{Leaf}_x \implies R_j' \neq R_j \implies \text{BlockH
 - [x] Run benchmarks for ingestion throughput and Merkle tree generation.
 - [x] Build multi-stage lightweight Dockerfile and Makefile.
 
+### Phase 7: Advanced Enterprise Features & Client SDKs
+- [x] Role-Based Access Control (RBAC) API Key store with role enforcement (`ingest_only`, `auditor_read`, `admin`) (`internal/auth/`).
+- [x] External RFC 3161 Timestamping and notary witnessing (`internal/notary/`).
+- [x] Real-time SIEM webhook log forwarder with HMAC-SHA256 request signatures (`internal/forwarder/`).
+- [x] Automated tamper alerting dispatcher (Slack, PagerDuty, Webhooks) (`internal/alerting/`).
+- [x] Native Go client SDK with asynchronous batching buffer (`sdk/go/`).
+- [x] Native TypeScript / Node.js client SDK with zero dependencies (`sdk/ts/`).
+- [x] React 19 Visual State-Change Diff Viewer (`web/src/components/EventDetailModal.tsx`).
+- [x] Dedicated Merkle DAG Block Chain Explorer Tab (`web/src/components/BlockChainExplorer.tsx`).
+- [x] One-Click SOC 2 / HIPAA Quick Filter Categories (`web/src/components/AuditFeed.tsx`).
+- [x] Append-only WAL segment rotation and cold-storage archiving CLI (`internal/ledger/wal_rotator.go`).
+

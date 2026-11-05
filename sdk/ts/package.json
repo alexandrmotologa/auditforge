@@ -1,0 +1,14 @@
+{
+  "name": "@auditforge/client",
+  "version": "1.0.0",
+  "description": "Zero-dependency, high-throughput TypeScript SDK for AuditForge immutable audit logs",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
