@@ -68,7 +68,7 @@ func TestEndToEnd_FullComplianceLifecycle(t *testing.T) {
 
 	// 2. Start REST & gRPC Servers
 	keyStore, _ := auth.NewKeyStore("", []string{"e2e-test-key"})
-	restHandler := rest.NewHandler(acc, indexer, wal, sseHub, keyStore, nil, nil, nil, ledger.AlgorithmBlake3)
+	restHandler := rest.NewHandler(acc, indexer, wal, sseHub, keyStore, nil, nil, nil, signer, ledger.AlgorithmBlake3)
 	httpServer := httptest.NewServer(restHandler)
 	defer httpServer.Close()
 

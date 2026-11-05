@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alexandrmotologa/auditforge/internal/alerting"
 	"github.com/alexandrmotologa/auditforge/internal/auth"
+	"github.com/alexandrmotologa/auditforge/internal/export"
 	"github.com/alexandrmotologa/auditforge/internal/forwarder"
 	"github.com/alexandrmotologa/auditforge/internal/index"
 	"github.com/alexandrmotologa/auditforge/internal/ledger"
@@ -27,6 +29,7 @@ type Handler struct {
 	forwarder            *forwarder.Forwarder
 	alertDispatcher      *alerting.Dispatcher
 	notaryClient         *notary.Client
+	signer               ledger.Signer
 	algo                 string
 	mux                  *http.ServeMux
 	simulatedTamperBlock *uint64
@@ -42,6 +45,7 @@ func NewHandler(
 	fwd *forwarder.Forwarder,
 	alertDisp *alerting.Dispatcher,
 	notaryClient *notary.Client,
+	signer ledger.Signer,
 	algo string,
 ) *Handler {
 	h := &Handler{
@@ -53,6 +57,7 @@ func NewHandler(
 		forwarder:       fwd,
 		alertDispatcher: alertDisp,
 		notaryClient:    notaryClient,
+		signer:          signer,
 		algo:            ledger.NormalizeAlgorithm(algo),
 		mux:             http.NewServeMux(),
 	}
@@ -76,6 +81,10 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/v1/verify", h.handleVerifyLedger)
 	h.mux.HandleFunc("GET /api/v1/stats", h.handleGetStats)
 	h.mux.HandleFunc("GET /metrics", h.handleMetrics)
+
+	// Export Proof Bundle & Compliance Certificate
+	h.mux.HandleFunc("GET /api/v1/export", h.handleExportProof)
+	h.mux.HandleFunc("GET /api/v1/report", h.handleExportReport)
 
 	// Webhooks & SIEM Forwarding Management
 	h.mux.HandleFunc("GET /api/v1/webhooks", h.handleListWebhooks)
@@ -403,6 +412,98 @@ func (h *Handler) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP auditforge_blocks_total Total number of sealed cryptographic blocks\n")
 	fmt.Fprintf(w, "# TYPE auditforge_blocks_total counter\n")
 	fmt.Fprintf(w, "auditforge_blocks_total %d\n", stats.TotalBlocks)
+}
+
+func (h *Handler) handleExportProof(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var startBlock, endBlock uint64 = 0, 999999
+	if s := q.Get("from"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil {
+			startBlock = parsed
+		}
+	}
+	if s := q.Get("to"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil {
+			endBlock = parsed
+		}
+	}
+
+	tempFile, err := os.CreateTemp("", "auditforge_export_*.proof")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed creating temp file for proof export")
+		return
+	}
+	tempPath := tempFile.Name()
+	tempFile.Close()
+	defer os.Remove(tempPath)
+
+	manifest, err := export.GenerateProofBundle(h.wal, startBlock, endBlock, h.signer, tempPath)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("failed generating proof bundle: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"auditforge_blocks_%d_%d.proof\"", manifest.StartBlockIndex, manifest.EndBlockIndex))
+	http.ServeFile(w, r, tempPath)
+}
+
+func (h *Handler) handleExportReport(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var startBlock, endBlock uint64 = 0, 999999
+	if s := q.Get("from"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil {
+			startBlock = parsed
+		}
+	}
+	if s := q.Get("to"); s != "" {
+		if parsed, err := strconv.ParseUint(s, 10, 64); err == nil {
+			endBlock = parsed
+		}
+	}
+
+	blocks, err := h.wal.ReadAllBlocks()
+	if err != nil || len(blocks) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "ledger is empty; cannot generate compliance report")
+		return
+	}
+
+	if endBlock >= uint64(len(blocks)) {
+		endBlock = uint64(len(blocks) - 1)
+	}
+	if startBlock > endBlock {
+		startBlock = 0
+	}
+
+	selectedBlocks := blocks[startBlock : endBlock+1]
+	var headers []*ledger.BlockHeader
+	var totalEvents uint64 = 0
+	for _, b := range selectedBlocks {
+		headers = append(headers, &b.Header)
+		totalEvents += uint64(len(b.Events))
+	}
+
+	manifest := &export.ProofManifest{
+		Version:          "1.0",
+		ExportedAt:       time.Now().UTC(),
+		Algorithm:        selectedBlocks[0].Header.Algorithm,
+		StartBlockIndex:  startBlock,
+		EndBlockIndex:    endBlock,
+		TotalBlocks:      uint64(len(selectedBlocks)),
+		TotalEvents:      totalEvents,
+		HeadBlockHash:    selectedBlocks[len(selectedBlocks)-1].Header.BlockHashHex,
+		GenesisBlockHash: selectedBlocks[0].Header.BlockHashHex,
+	}
+	if h.signer != nil {
+		manifest.SignerKeyID = h.signer.KeyID()
+	}
+
+	verRes := ledger.VerifyLedgerChain(selectedBlocks)
+	reportHTML := export.GenerateComplianceHTMLReport(manifest, headers, verRes)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"auditforge_compliance_report.html\"")
+	_, _ = w.Write([]byte(reportHTML))
 }
 
 func (h *Handler) handleListWebhooks(w http.ResponseWriter, r *http.Request) {

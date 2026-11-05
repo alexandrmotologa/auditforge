@@ -66,7 +66,7 @@ func TestREST_IngestAndQuery(t *testing.T) {
 	defer cleanup()
 
 	keyStore, _ := auth.NewKeyStore("", []string{"test-valid-key"})
-	handler := rest.NewHandler(acc, idx, wal, sseHub, keyStore, nil, nil, nil, ledger.AlgorithmBlake3)
+	handler := rest.NewHandler(acc, idx, wal, sseHub, keyStore, nil, nil, nil, nil, ledger.AlgorithmBlake3)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
