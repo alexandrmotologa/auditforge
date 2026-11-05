@@ -1,0 +1,41 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+auditforge
+auditverify
+
+# Go
+vendor/
+*.test
+*.out
+
+# Node / Web
+node_modules/
+web/dist/
+web/.vite/
+web/node_modules/
+dist/
+
+# AuditForge data files
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.wal
+*.proof
+*.tar.gz
+
+# Environment & IDE
+.env
+.env.local
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
