@@ -181,48 +181,48 @@ $$\text{Leaf}_x' \neq \text{Leaf}_x \implies R_j' \neq R_j \implies \text{BlockH
 ## 6. Implementation Roadmap & Milestones
 
 ### Phase 1: Cryptographic Ledger Core & Canonical Merkle Tree
-- [ ] Initialize Go module `github.com/alexandrmotologa/auditforge`.
-- [ ] Implement RFC 8785 canonical JSON sorting and Blake3/SHA-256 leaf hashing (`internal/ledger/canonical.go`, `internal/ledger/hash.go`).
-- [ ] Build binary Merkle Tree structure with proof path extraction and verification (`internal/ledger/merkle.go`).
-- [ ] Build cryptographic block models and hash-chain linking (`internal/ledger/block.go`).
-- [ ] Build append-only Write-Ahead Log (WAL) with binary framing (Magic bytes, length, CRC32, payload, boundary marker) and crash recovery (`internal/ledger/wal.go`).
-- [ ] Implement lock-free in-memory batch ring buffer accumulator (`internal/ledger/accumulator.go`).
-- [ ] Build continuous chain integrity verifier (`internal/ledger/verifier.go`).
-- [ ] Comprehensive unit tests: verify canonicalization, Merkle proofs, WAL durability, and tamper detection on deliberate bit-flips.
+- [x] Initialize Go module `github.com/alexandrmotologa/auditforge`.
+- [x] Implement RFC 8785 canonical JSON sorting and Blake3/SHA-256 leaf hashing (`internal/ledger/canonical.go`, `internal/ledger/hash.go`).
+- [x] Build binary Merkle Tree structure with proof path extraction and verification (`internal/ledger/merkle.go`).
+- [x] Build cryptographic block models and hash-chain linking (`internal/ledger/block.go`).
+- [x] Build append-only Write-Ahead Log (WAL) with binary framing (Magic bytes, length, CRC32, payload, boundary marker) and crash recovery (`internal/ledger/wal.go`).
+- [x] Implement lock-free in-memory batch ring buffer accumulator (`internal/ledger/accumulator.go`).
+- [x] Build continuous chain integrity verifier (`internal/ledger/verifier.go`).
+- [x] Comprehensive unit tests: verify canonicalization, Merkle proofs, WAL durability, and tamper detection on deliberate bit-flips.
 
 ### Phase 2: Embedded Secondary Search Index (SQLite)
-- [ ] Implement pure-Go embedded SQLite schema and connection manager (`internal/index/sqlite.go`).
-- [ ] Implement indexed event search, multi-field filtering, pagination, and block lookups (`internal/index/query.go`).
-- [ ] Implement WAL-to-SQLite rebuild/re-index engine (`internal/index/reindex.go`).
+- [x] Implement pure-Go embedded SQLite schema and connection manager (`internal/index/sqlite.go`).
+- [x] Implement indexed event search, multi-field filtering, pagination, and block lookups (`internal/index/query.go`).
+- [x] Implement WAL-to-SQLite rebuild/re-index engine (`internal/index/reindex.go`).
 
 ### Phase 3: Ingestion APIs (REST, gRPC, SSE) & Security
-- [ ] Protocol Buffers schema definition (`internal/api/grpc/proto/audit.proto`).
-- [ ] Generate Go protobuf and gRPC server stubs.
-- [ ] Implement gRPC ingestion server (`internal/api/grpc/server.go`).
-- [ ] Implement HTTP REST API with routing, API key authentication, and rate limiting (`internal/api/rest/handler.go`).
-- [ ] Implement Server-Sent Events (SSE) live audit stream (`internal/api/rest/sse.go`).
-- [ ] Prometheus metrics endpoint (`/metrics`) for ingestion throughput, block sealing latency, and event counts.
+- [x] Protocol Buffers schema definition (`internal/api/grpc/proto/audit.proto`).
+- [x] Generate Go protobuf and gRPC server stubs.
+- [x] Implement gRPC ingestion server (`internal/api/grpc/server.go`).
+- [x] Implement HTTP REST API with routing, API key authentication, and rate limiting (`internal/api/rest/handler.go`).
+- [x] Implement Server-Sent Events (SSE) live audit stream (`internal/api/rest/sse.go`).
+- [x] Prometheus metrics endpoint (`/metrics`) for ingestion throughput, block sealing latency, and event counts.
 
 ### Phase 4: Proof Packaging, Ed25519 Signing & Standalone Offline CLI Verifier
-- [ ] Implement Ed25519 compliance key generation and block signing (`internal/ledger/signer.go`).
-- [ ] Implement `.proof` bundle archive generator (`internal/export/proof_bundle.go`).
-- [ ] Implement printable HTML/PDF SOC 2 compliance summary report generator (`internal/export/report.go`).
-- [ ] Build standalone `cmd/auditverify` CLI tool for offline verification with colored terminal outputs.
-- [ ] Build `cmd/auditforge` daemon CLI with subcommands (`serve`, `verify`, `export-proof`, `reindex`, `simulate-tamper`).
+- [x] Implement Ed25519 compliance key generation and block signing (`internal/ledger/signer.go`).
+- [x] Implement `.proof` bundle archive generator (`internal/export/proof_bundle.go`).
+- [x] Implement printable HTML/PDF SOC 2 compliance summary report generator (`internal/export/report.go`).
+- [x] Build standalone `cmd/auditverify` CLI tool for offline verification with colored terminal outputs.
+- [x] Build `cmd/auditforge` daemon CLI with subcommands (`serve`, `verify`, `export-proof`, `reindex`, `simulate-tamper`).
 
 ### Phase 5: Embedded React 19 Compliance Cockpit
-- [ ] Scaffold React 19 + TypeScript + Vite + Tailwind CSS frontend in `web/`.
-- [ ] Implement Live Integrity Shield (real-time VERIFIED / TAMPERED indicator).
-- [ ] Implement Live Event Stream with SSE auto-refresh and pause/resume.
-- [ ] Implement Filter & Search cockpit (tenants, actors, actions, targets, date ranges).
-- [ ] Implement Event Detail & Cryptographic Merkle Inspector Modal (visual leaf-to-root audit path).
-- [ ] Implement 1-Click SOC 2 / HIPAA `.proof` export dialog and compliance summary report viewer.
-- [ ] Implement Interactive Tamper Simulation tester tab to demonstrate instantaneous tamper detection.
-- [ ] Embed static assets directly into the Go binary using `//go:embed`.
+- [x] Scaffold React 19 + TypeScript + Vite + Tailwind CSS frontend in `web/`.
+- [x] Implement Live Integrity Shield (real-time VERIFIED / TAMPERED indicator).
+- [x] Implement Live Event Stream with SSE auto-refresh and pause/resume.
+- [x] Implement Filter & Search cockpit (tenants, actors, actions, targets, date ranges).
+- [x] Implement Event Detail & Cryptographic Merkle Inspector Modal (visual leaf-to-root audit path).
+- [x] Implement 1-Click SOC 2 / HIPAA `.proof` export dialog and compliance summary report viewer.
+- [x] Implement Interactive Tamper Simulation tester tab to demonstrate instantaneous tamper detection.
+- [x] Embed static assets directly into the Go binary using `//go:embed`.
 
 ### Phase 6: Automated End-to-End Testing, Benchmarking & Packaging
-- [ ] Write end-to-end integration tests (ingestion -> sealing -> querying -> proof export -> offline verification).
-- [ ] Write tamper detection integration test verifying that any bit flip fails offline verification.
-- [ ] Run benchmarks for ingestion throughput and Merkle tree generation.
-- [ ] Build multi-stage lightweight Dockerfile and Makefile.
+- [x] Write end-to-end integration tests (ingestion -> sealing -> querying -> proof export -> offline verification).
+- [x] Write tamper detection integration test verifying that any bit flip fails offline verification.
+- [x] Run benchmarks for ingestion throughput and Merkle tree generation.
+- [x] Build multi-stage lightweight Dockerfile and Makefile.
 
