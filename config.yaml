@@ -1,0 +1,11 @@
+http_port: 8080
+grpc_port: 9090
+data_dir: "./data"
+wal_path: "./data/ledger.wal"
+db_path: "./data/index.db"
+key_path: "./data/signer.key"
+algorithm: "blake3"
+batch_size: 500
+flush_interval: 100ms
+api_keys:
+  - "default-dev-key"
