@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package auditforge.v1;
+
+option go_package = "github.com/alexandrmotologa/auditforge/internal/api/grpc/proto";
+
+message ActorMsg {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string role = 4;
+  map<string, string> metadata = 5;
+}
+
+message TargetMsg {
+  string id = 1;
+  string type = 2;
+  string name = 3;
+  map<string, string> metadata = 4;
+}
+
+message AuditEventRequest {
+  string id = 1;
+  string timestamp = 2;
+  string tenant_id = 3;
+  ActorMsg actor = 4;
+  string action = 5;
+  TargetMsg target = 6;
+  map<string, string> metadata = 7;
+  bool sync = 8;
+}
+
+message AuditEventResponse {
+  string status = 1;
+  string event_id = 2;
+  string leaf_hash = 3;
+  uint64 block_index = 4;
+  int32 leaf_index = 5;
+  string received_at = 6;
+}
+
+message AuditBatchRequest {
+  string tenant_id = 1;
+  repeated AuditEventRequest events = 2;
+  bool sync = 3;
+}
+
+message AuditBatchResponse {
+  string status = 1;
+  int32 ingested_count = 2;
+  repeated string leaf_hashes = 3;
+  uint64 block_index = 4;
+}
+
+message MerkleStepMsg {
+  string position = 1;
+  string sibling_hex = 2;
+}
+
+message VerifyEventRequest {
+  string event_id = 1;
+}
+
+message VerifyEventResponse {
+  bool valid = 1;
+  string event_id = 2;
+  string leaf_hash = 3;
+  uint64 block_index = 4;
+  string merkle_root = 5;
+  repeated MerkleStepMsg proof_steps = 6;
+}
+
+service AuditService {
+  rpc IngestEvent(AuditEventRequest) returns (AuditEventResponse);
+  rpc IngestBatch(AuditBatchRequest) returns (AuditBatchResponse);
+  rpc VerifyEvent(VerifyEventRequest) returns (VerifyEventResponse);
+}
